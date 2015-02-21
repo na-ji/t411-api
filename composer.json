@@ -1,0 +1,19 @@
+{
+    "name": "na-ji/t411",
+    "description": "PHPT411 is a PHP library to search and download torrents on the website T411",
+    "keywords": ["T411", "library"],
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Naji Astier",
+            "email": "naji@astier.eu"
+        }
+    ],
+    "minimum-stability": "dev",
+    "require": {
+        "php": ">=5.4"
+    },
+    "autoload": {
+        "psr-0": { "Naji\\T411": "src" }
+    }
+}
