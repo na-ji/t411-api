@@ -76,7 +76,7 @@ class Client
 		curl_setopt($ch, CURLOPT_COOKIEFILE, $this->cacheFolder."/cookies.txt");
 		// Fake user agent to simulate a real browser
 		curl_setopt($ch, CURLOPT_USERAGENT, "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Ubuntu Chromium/40.0.2214.111 Chrome/40.0.2214.111 Safari/537.36");
-		curl_setopt($ch, CURLOPT_REFERER, $baseUrl);
+		curl_setopt($ch, CURLOPT_REFERER, $this->baseUrl);
 		$response = curl_exec($ch);
 
 		$header_size = curl_getinfo($ch, CURLINFO_HEADER_SIZE);
@@ -110,7 +110,7 @@ class Client
      */
 	public function connect()
 	{
-		$this->sendRequest($baseUrl."/users/login/", array('url' => '/', 'remember' => 1, 'login' => $this->login, 'password' => $this->password));
+		$this->sendRequest($this->baseUrl."/users/login/", array('url' => '/', 'remember' => 1, 'login' => $this->login, 'password' => $this->password));
 	}
 
     /**
@@ -129,7 +129,7 @@ class Client
 			$params['subcat'] = '433';
 		$params['search'] = '@name '.$params['search'];
 
-		$request = $this->sendRequest($baseUrl."/torrents/search/".$this->queryString($params), null, 0);
+		$request = $this->sendRequest($this->baseUrl."/torrents/search/".$this->queryString($params), null, 0);
 		// We search for all the names and links
 		$results = preg_match_all('/<a href="\/\/(.*?)" title="(.*?)">/i', $request['body'], $links, PREG_SET_ORDER);
 		// We search for all the number of seeders
@@ -164,7 +164,7 @@ class Client
 				return $this->downloadTorrent($url);
 			}
 
-			$request = $this->sendRequest($baseUrl.$link[1], null, 0);
+			$request = $this->sendRequest($this->baseUrl.$link[1], null, 0);
 
 			preg_match('/filename="(.*?)"/i', $request['header'], $filename);
 
