@@ -179,8 +179,6 @@ class Client
 		$request = $this->sendRequest($this->baseUrl."/torrents/search/".urlencode($query).$this->queryString($params), null, 0);
 
 		$response = json_decode($request['body'], true);
-		var_dump($response);
-		var_dump(array_key_exists('error', $response));
 		if (array_key_exists('error', $response))
 		{
 			if ($response['code'] == 201 || $response['code'] == 202) {
