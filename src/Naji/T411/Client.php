@@ -25,6 +25,13 @@ class Client
 	private $password;
 
     /**
+     * token to use T411 API
+     *
+     * @var string
+     */
+	private $token;
+
+    /**
      * Path to cache folder where cookies are stored
      *
      * @var string
@@ -44,12 +51,13 @@ class Client
      * @param string $cacheFolder Path to cache folder where cookies are stored
      * @param string $baseUrl Domain name of T411 without trailing slash
      */
-	public function __construct($login, $password, $cacheFolder, $baseUrl = 'http://www.t411.io')
+	public function __construct($login, $password, $cacheFolder, $baseUrl = 'http://api.t411.io')
 	{
 		$this->login       = $login;
 		$this->password    = $password;
 		$this->cacheFolder = $cacheFolder;
 		$this->baseUrl     = $baseUrl;
+		$this->loadToken();
 	}
 
     /**
@@ -60,7 +68,7 @@ class Client
      * @param string $post Boolean whether it is a post request or not
      * @return array
      */
-	private function sendRequest($url, $params, $post = 1)
+	private function sendRequest($url, $params, $post = 1, $headers = array('Accept: application/json, text/javascript, */*; q=0.01', 'Content-Type=application/x-www-form-urlencoded'))
 	{
 		$ch = curl_init();
 		curl_setopt($ch, CURLOPT_URL, $url);
@@ -69,13 +77,18 @@ class Client
 			curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($params, null, '&'));
 		curl_setopt($ch, CURLOPT_POST, $post);
 		curl_setopt($ch, CURLOPT_HEADER, 1);
+		if (isset($this->token))
+		{
+			$headers[] = 'Authorization: '.$this->token;
+		}
+		curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
 		curl_setopt($ch, CURLOPT_VERBOSE, 0);
 		curl_setopt($ch, CURLOPT_FOLLOWLOCATION, 1);
 		curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 10);
 		curl_setopt($ch, CURLOPT_COOKIEJAR, $this->cacheFolder."/cookies.txt");
 		curl_setopt($ch, CURLOPT_COOKIEFILE, $this->cacheFolder."/cookies.txt");
 		// Fake user agent to simulate a real browser
-		curl_setopt($ch, CURLOPT_USERAGENT, "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Ubuntu Chromium/40.0.2214.111 Chrome/40.0.2214.111 Safari/537.36");
+		curl_setopt($ch, CURLOPT_USERAGENT, "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Ubuntu Chromium/41.0.2272.76 Chrome/41.0.2272.76 Safari/537.36");
 		curl_setopt($ch, CURLOPT_REFERER, $this->baseUrl);
 		$response = curl_exec($ch);
 
@@ -106,11 +119,45 @@ class Client
 	}
 
     /**
-     * Connect to the T411 website to generate cookies file
+     * Save token into a file
+     */
+	private function saveToken()
+	{
+		$fd = fopen($this->cacheFolder."/token.txt", 'w');
+		fwrite($fd, $this->token);
+		fclose($fd);
+	}
+
+    /**
+     * Load token from a file
+     */
+	private function loadToken()
+	{
+		if (file_exists($this->cacheFolder."/token.txt"))
+		{
+			$fd = fopen($this->cacheFolder."/token.txt", 'r');
+			$this->token = fgets($fd);
+			fclose($fd);
+		} else {
+			$this->connect();
+		}
+	}
+
+    /**
+     * Connect to the T411 website to save the token key
      */
 	public function connect()
 	{
-		$this->sendRequest($this->baseUrl."/users/login/", array('url' => '/', 'remember' => 1, 'login' => $this->login, 'password' => $this->password));
+		$request  = $this->sendRequest($this->baseUrl."/auth", array('username' => $this->login, 'password' => $this->password), 2);
+
+		$response = json_decode($request['body'], true);
+		if (array_key_exists('error', $response))
+		{
+			throw new \Exception('Erreur '.$response['code'].' : '.$response['error']);
+		} else {
+			$this->token = $response['token'];
+			$this->saveToken();
+		}
 	}
 
     /**
@@ -119,58 +166,78 @@ class Client
      * @param string $params GET parameters to send (filters)
      * @return array
      */
-	public function search($params = array('search' => ''))
+	public function search($query, $params = array())
 	{
-		// Set default type to "Film/Video"
-		if (!isset($params['cat']))
-			$params['cat'] = '210';
 		// Set default category to "Série TV"
-		if (!isset($params['subcat']))
-			$params['subcat'] = '433';
-		$params['search'] = '@name '.$params['search'];
+		if (!isset($params['cid']))
+			$params['cid'] = '433';
+		if (!isset($params['offset']))
+			$params['offset'] = '0';
+		if (!isset($params['limit']))
+			$params['limit'] = '200';
 
-		$request = $this->sendRequest($this->baseUrl."/torrents/search/".$this->queryString($params), null, 0);
-		// We search for all the names and links
-		$results = preg_match_all('/<a href="\/\/(.*?)" title="(.*?)">/i', $request['body'], $links, PREG_SET_ORDER);
-		// We search for all the number of seeders
-		preg_match_all('/<td align="center" class="up">(.*?)<\/td>/i', $request['body'], $seeders, PREG_SET_ORDER);
-		$torrents = array();
-		if ($results)
+		$request = $this->sendRequest($this->baseUrl."/torrents/search/".urlencode($query).$this->queryString($params), null, 0);
+
+		$response = json_decode($request['body'], true);
+		var_dump($response);
+		var_dump(array_key_exists('error', $response));
+		if (array_key_exists('error', $response))
 		{
-			for ($i = 0; $i < count($links); $i++) {
-				$torrents[] = array('url' => $links[$i][1], 'name' => trim($links[$i][2]), 'seeder' => intval($seeders[$i][1]));
+			if ($response['code'] == 201 || $response['code'] == 202) {
+				$this->connect();
+				return $this->search($query, $params);
 			}
-		}
+			throw new \Exception('Erreur '.$response['code'].' : '.$response['error']);
+		} else {
+			$torrents = array();
+			if (intval($response['total']) > 0)
+			{
+				foreach ($response['torrents'] as $torrent){
+					$torrents[] = array_merge($torrent, array(
+						'url'             => 'http://www.t411.io/torrents/'.$torrent['rewritename'],
+						'id'              => intval($torrent['id']),
+						'seeders'         => intval($torrent['seeders']),
+						'leechers'        => intval($torrent['leechers']),
+						'comments'        => intval($torrent['comments']),
+						'size'            => intval($torrent['size']),
+						'times_completed' => intval($torrent['times_completed']),
+						'owner'           => intval($torrent['owner']),
+						'isVerified'      => (boolean) intval($torrent['isVerified']),
+					));
+				}
+			}
 
-		return $torrents;
+			return $torrents;
+		}
 	}
 
     /**
-     * Download the .torrent at a T411 URL
+     * Download the .torrent from ID
      *
-     * @param string $url The URL of the torrent to download
+     * @param string $id   The id of the torrent to download
      * @param string $path The path to save the .torrent
      */
-	public function downloadTorrent($url, $path = '')
+	public function downloadTorrent($id, $path = '')
 	{
-		$req = $this->sendRequest($url, null, 0);
+		$request  = $this->sendRequest($this->baseUrl."/torrents/download/".$id, null, 0);
+		$response = json_decode($request['body'], true);
 
-		$result = preg_match('/<a href="(.*?)" class="btn">T&#233;l&#233;charger<\/a>/i', $req['body'], $link);
-		if ($result)
+		if (NULL === $response)
 		{
-			if (preg_match('/users\/login/i', $link[1]))
-			{
-				$this->connect();
-				return $this->downloadTorrent($url);
-			}
-
-			$request = $this->sendRequest($this->baseUrl.$link[1], null, 0);
-
 			preg_match('/filename="(.*?)"/i', $request['header'], $filename);
 
 			$file = fopen($path.'/'.$filename[1], 'w+');
 			fwrite($file, $request['body']);
 			fclose($file);
+		} else {
+			if (array_key_exists('error', $response))
+			{
+				if ($response['code'] == 201 || $response['code'] == 202) {
+					$this->connect();
+					return $this->downloadTorrent($id, $path);
+				}
+				throw new \Exception('Erreur '.$response['code'].' : '.$response['error']);
+			}
 		}
 	}
 }
