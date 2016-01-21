@@ -51,7 +51,7 @@ class Client
      * @param string $cacheFolder Path to cache folder where cookies are stored
      * @param string $baseUrl Domain name of T411 without trailing slash
      */
-	public function __construct($login, $password, $cacheFolder, $baseUrl = 'http://api.t411.io')
+	public function __construct($login, $password, $cacheFolder, $baseUrl = 'https://api.t411.in')
 	{
 		$this->login       = $login;
 		$this->password    = $password;
@@ -192,7 +192,7 @@ class Client
 			{
 				foreach ($response['torrents'] as $torrent){
 					$torrents[] = array_merge($torrent, array(
-						'url'             => 'http://www.t411.io/torrents/'.$torrent['rewritename'],
+						'url'             => 'http://www.t411.in/torrents/'.$torrent['rewritename'],
 						'id'              => intval($torrent['id']),
 						'seeders'         => intval($torrent['seeders']),
 						'leechers'        => intval($torrent['leechers']),
