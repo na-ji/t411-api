@@ -176,7 +176,7 @@ class Client
 		if (!isset($params['limit']))
 			$params['limit'] = '200';
 
-		$request = $this->sendRequest($this->baseUrl."/torrents/search/".urlencode($query).$this->queryString($params), null, 0);
+		$request = $this->sendRequest($this->baseUrl."/torrents/search/".urlencode($query.'*').$this->queryString($params), null, 0);
 
 		$response = json_decode($request['body'], true);
 		if (array_key_exists('error', $response))
